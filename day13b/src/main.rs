@@ -35,16 +35,16 @@ impl Default for ClawMachine {
 }
 
 impl ClawMachine {
-    fn get_cost(&mut self) -> usize {
-        let max_a = cmp::min(
-            (self.prize_location.x / self.button_a.x) + 1,
-            (self.prize_location.y / self.button_a.y) + 1,
-        );
 
-        let max_b = cmp::min(
-            (self.prize_location.x / self.button_b.x) + 1,
-            (self.prize_location.y / self.button_b.y) + 1,
-        );
+    fn get_max_a(&mut self) -> usize {
+    {
+	cmp::min(
+	    self.prize_location.x / self.button_a.x,
+	    self.prize_location.x / self.button_b.x)
+    }
+    
+    fn get_cost(&mut self) -> usize {
+        let max_a = get_max_a();
 
         let mut cost = usize::MAX;
 
