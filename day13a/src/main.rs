@@ -1,47 +1,75 @@
 use regex::{Captures, Regex};
 
+use std::cmp;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::time::Instant;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct Coordinates {
     x: usize,
     y: usize,
 }
 
-#[derive(Debug, Default)]
+impl Default for Coordinates {
+    fn default() -> Self {
+        Coordinates { x: 0, y: 0 }
+    }
+}
+
+#[derive(Debug)]
 struct ClawMachine {
     button_a: Coordinates,
     button_b: Coordinates,
     prize_location: Coordinates,
 }
 
-impl ClawMachine {
-    fn cramers_get_cost(&mut self) -> usize {
-        let det = self.button_a.x as isize * self.button_b.y as isize
-            - self.button_a.y as isize * self.button_b.x as isize;
-        let det_a = self.prize_location.x as isize * self.button_b.y as isize
-            - self.prize_location.y as isize * self.button_b.x as isize;
-        let det_b = self.button_a.x as isize * self.prize_location.y as isize
-            - self.button_a.y as isize * self.prize_location.x as isize;
-
-        let a = det_a / det;
-        let b = det_b / det;
-
-        if a < 0 || b < 0 {
-            return 0;
+impl Default for ClawMachine {
+    fn default() -> Self {
+        ClawMachine {
+            button_a: Coordinates::default(),
+            button_b: Coordinates::default(),
+            prize_location: Coordinates::default(),
         }
+    }
+}
 
-        let a = a as usize;
-        let b = b as usize;
+impl ClawMachine {
+    fn get_cost(&mut self) -> usize {
+        let max_a = cmp::min(
+            (self.prize_location.x / self.button_a.x) + 1,
+            (self.prize_location.y / self.button_a.y) + 1,
+        );
 
-        if self.button_a.x * a + self.button_b.x * b == self.prize_location.x {
-            if self.button_a.y * a + self.button_b.y * b == self.prize_location.y {
-                return a * 3 + b;
+        let max_b = cmp::min(
+            (self.prize_location.x / self.button_b.x) + 1,
+            (self.prize_location.y / self.button_b.y) + 1,
+        );
+
+        let mut cost = usize::MAX;
+
+        for a in 0..max_a {
+            for b in 0..max_b {
+                let xpos = a * self.button_a.x + b * self.button_b.x;
+                let ypos = a * self.button_a.y + b * self.button_b.y;
+
+                //println!("a {} b {}", a, b);
+
+                if xpos == self.prize_location.x && ypos == self.prize_location.y {
+                    cost = cmp::min(cost, a * 3 + b);
+                }
+
+                if xpos >= self.prize_location.x || ypos >= self.prize_location.y {
+                    break;
+                }
             }
         }
-        0
+
+        if cost == usize::MAX {
+            0
+        } else {
+            cost
+        }
     }
 }
 
@@ -56,7 +84,7 @@ fn get_x_y(p1: usize, p2: usize, mat: &Captures<'_>) -> (usize, usize) {
 }
 
 fn read_input() -> io::Result<Vec<ClawMachine>> {
-    let path = "day13.txt"; // File path
+    let path = "test.txt"; // File path
     let file = File::open(path)?;
     let mut reader = io::BufReader::new(file);
 
@@ -104,8 +132,7 @@ fn main() -> io::Result<()> {
 
     let mut cost = 0;
     for mut cm in claw_machines {
-        //println!("ClawMachine {:?}", cm);
-        cost += cm.cramers_get_cost();
+        cost += cm.get_cost();
     }
     let end = start.elapsed();
     println!("Total Cost {:?} in {:?}", cost, end);

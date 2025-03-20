@@ -1,7 +1,9 @@
 use regex::{Captures, Regex};
 
+use crossterm::{cursor, terminal, ExecutableCommand};
+
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, stdout, BufRead, Write};
 use std::time::Instant;
 
 #[derive(Debug, Default)]
@@ -41,9 +43,9 @@ impl SecurityGrid {
         }
     }
 
-    fn calculate_final_pos(&mut self) {
+    fn calculate_pos(&mut self, num_step: usize) {
         for r in self.robots.iter_mut() {
-            for _i in 0..100 {
+            for _i in 0..num_step {
                 r.pos.x += r.vec.x;
                 r.pos.y += r.vec.y;
 
@@ -58,40 +60,60 @@ impl SecurityGrid {
                 } else if r.pos.y < 0 {
                     r.pos.y += self.size_y;
                 }
-
-                println!("{} {}", r.pos.x, r.pos.y);
             }
         }
     }
 
-    fn print_grid(&mut self) {
-        let mut v = vec![vec![0; self.size_x as usize]; self.size_y as usize];
+    fn print_grid(&mut self) -> bool {
+        let mut grid = vec![vec!['.'; self.size_x as usize]; self.size_y as usize];
         for r in self.robots.iter_mut() {
-            v[r.pos.y as usize][r.pos.x as usize] += 1;
+            grid[r.pos.y as usize][r.pos.x as usize] = '#';
         }
 
-        for tmp in v.iter() {
-            println!("{:?}", tmp);
-        }
-    }
+        let mut print_grid = false;
+        let mut consecutive = 0;
+        for row in grid.iter() {
+            if print_grid {
+                break;
+            }
 
-    fn calc_quads(&mut self) -> usize {
-        let (mut q1, mut q2, mut q3, mut q4) = (0, 0, 0, 0);
+            for val in row.iter() {
+                if *val == '.' {
+                    consecutive = 0;
+                } else {
+                    consecutive += 1;
+                }
 
-        for r in self.robots.iter() {
-            if r.pos.x < self.size_x / 2 && r.pos.y < self.size_y / 2 {
-                q1 += 1;
-            } else if r.pos.x > self.size_x / 2 && r.pos.y < self.size_y / 2 {
-                q2 += 1;
-            } else if r.pos.x < self.size_x / 2 && r.pos.y > self.size_y / 2 {
-                q3 += 1;
-            } else if r.pos.x > self.size_x / 2 && r.pos.y > self.size_y / 2 {
-                q4 += 1;
+                if consecutive > 10 {
+                    print_grid = true;
+                    break;
+                }
             }
         }
 
-        println!("{} {} {} {}", q1, q2, q3, q4);
-        q1 * q2 * q3 * q4
+        if print_grid {
+            self.init_terminal();
+
+            let mut stdout = stdout();
+            stdout.execute(cursor::MoveTo(0, 0)).unwrap();
+
+            for row in grid.iter() {
+                let s: String = row.iter().collect();
+                writeln!(stdout, "{}", s).unwrap();
+            }
+
+            stdout.flush().unwrap();
+            return true;
+        }
+
+        false
+    }
+
+    fn init_terminal(&mut self) {
+        let mut stdout = stdout();
+        stdout
+            .execute(terminal::Clear(terminal::ClearType::All))
+            .unwrap();
     }
 }
 
@@ -133,10 +155,16 @@ fn main() -> io::Result<()> {
     let robot_list = read_input()?;
     let mut grid = SecurityGrid::new(robot_list, 101, 103);
 
-    grid.calculate_final_pos();
-    grid.print_grid();
+    grid.init_terminal();
 
-    let cost = grid.calc_quads();
+    let mut cost = 0;
+    loop {
+        grid.calculate_pos(1);
+        cost += 1;
+        if grid.print_grid() {
+            break;
+        }
+    }
 
     let end = start.elapsed();
     println!("Total Cost {:?} in {:?}", cost, end);
