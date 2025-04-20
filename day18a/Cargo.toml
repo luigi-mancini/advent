@@ -1,0 +1,9 @@
+[package]
+name = "day18a"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+regex ="1.9"
+anyhow="1.0"
+crossterm = "0.28.1"	
