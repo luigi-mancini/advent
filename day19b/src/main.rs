@@ -1,4 +1,6 @@
 use anyhow::Result;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::time::Instant;
@@ -7,18 +9,24 @@ use std::time::Instant;
 struct Onsen {
     towels: Vec<String>,
     designs: Vec<String>,
+
+    cache: RefCell<HashMap<usize, usize>>,
 }
 
 impl Onsen {
     fn new(towels: Vec<String>, designs: Vec<String>) -> Self {
-        Onsen { towels, designs }
+        Onsen {
+            towels,
+            designs,
+            cache: RefCell::new(HashMap::new()),
+        }
     }
 
     fn valid_design(&self, design: &str, buf: &mut String, count: &mut usize) -> bool {
         if design == buf {
-	   //println!("Matched {}", design);
-	   *count += 1;
-	   return true;
+            //println!("Matched {}", design);
+            *count += 1;
+            return true;
         }
 
         let start = buf.len();
@@ -30,24 +38,35 @@ impl Onsen {
             }
 
             buf.push_str(t);
-	    let _ = self.valid_design(design, buf, count);
-	    buf.truncate(buf.len() - t.len());
+            match self.cache.borrow().get(&(design.len() - buf.len())) {
+                Some(val) => {
+                    *count += *val;
+                    buf.truncate(buf.len() - t.len());
+                    return true;
+                }
+                None => {
+                    let _ = self.valid_design(design, buf, count);
+                    buf.truncate(buf.len() - t.len());
+                }
+            }
         }
         false
     }
 
     fn find_valid_designs(&self) -> usize {
         let mut count = 0;
-        let mut overall = 0;	
+        let mut overall = 0;
 
         for d in self.designs.iter() {
+            self.cache.borrow_mut().clear();
+
             let mut temp = String::new();
-	    let mut total_count = 0;
+            let mut total_count = 0;
             if self.valid_design(d, &mut temp, &mut total_count) {
                 count += 1;
             }
-	    overall += total_count;
-	    println!("MY TOTAL COUNT IS {}", total_count);
+            overall += total_count;
+            println!("MY TOTAL COUNT IS {}", total_count);
         }
 
         overall
