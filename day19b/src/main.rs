@@ -23,13 +23,17 @@ impl Onsen {
     }
 
     fn valid_design(&self, design: &str, buf: &mut String, count: &mut usize) -> bool {
+        // valid_design is recursively called for each position in the string. local_count
+        // is the number of ways a design[n..] can be made
+        let mut local_count = 0;
+
         if design == buf {
-            //println!("Matched {}", design);
             *count += 1;
             return true;
         }
 
         let start = buf.len();
+        let mut return_val = false;
 
         for t in self.towels.iter() {
             let end = start + t.len();
@@ -38,35 +42,48 @@ impl Onsen {
             }
 
             buf.push_str(t);
-            match self.cache.borrow().get(&(design.len() - buf.len())) {
+            let x = self
+                .cache
+                .borrow()
+                .get(&(design.len() - buf.len()))
+                .copied();
+            match x {
                 Some(val) => {
-                    *count += *val;
-                    buf.truncate(buf.len() - t.len());
-                    return true;
+                    *count += val;
+                    local_count += val;
+                    return_val = true;
                 }
                 None => {
-                    let _ = self.valid_design(design, buf, count);
-                    buf.truncate(buf.len() - t.len());
+                    let mut temp = 0;
+                    if self.valid_design(design, buf, &mut temp) {
+                        return_val = true;
+                    }
+                    *count += temp;
+                    local_count += temp;
                 }
             }
+            buf.truncate(buf.len() - t.len());
         }
-        false
+
+        self.cache
+            .borrow_mut()
+            .insert(design.len() - buf.len(), local_count);
+        return_val
     }
 
     fn find_valid_designs(&self) -> usize {
-        let mut count = 0;
         let mut overall = 0;
 
         for d in self.designs.iter() {
+            println!("DESIGN {}", d);
+
             self.cache.borrow_mut().clear();
 
             let mut temp = String::new();
             let mut total_count = 0;
-            if self.valid_design(d, &mut temp, &mut total_count) {
-                count += 1;
-            }
+
+            self.valid_design(d, &mut temp, &mut total_count);
             overall += total_count;
-            println!("MY TOTAL COUNT IS {}", total_count);
         }
 
         overall
