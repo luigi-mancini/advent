@@ -14,10 +14,11 @@ impl Onsen {
         Onsen { towels, designs }
     }
 
-    fn valid_design(&self, design: &str, buf: &mut String) -> bool {
+    fn valid_design(&self, design: &str, buf: &mut String, count: &mut usize) -> bool {
         if design == buf {
-	   println!("Matched {}", design);
-            return true;
+	   //println!("Matched {}", design);
+	   *count += 1;
+	   return true;
         }
 
         let start = buf.len();
@@ -29,27 +30,27 @@ impl Onsen {
             }
 
             buf.push_str(t);
-            match self.valid_design(design, buf) {
-	    	  true => return true,
-		  false => {
-		      buf.truncate(buf.len() - t.len());
-		  }
-	    }
+	    let _ = self.valid_design(design, buf, count);
+	    buf.truncate(buf.len() - t.len());
         }
         false
     }
 
     fn find_valid_designs(&self) -> usize {
         let mut count = 0;
+        let mut overall = 0;	
 
         for d in self.designs.iter() {
             let mut temp = String::new();
-            if self.valid_design(d, &mut temp) {
+	    let mut total_count = 0;
+            if self.valid_design(d, &mut temp, &mut total_count) {
                 count += 1;
             }
+	    overall += total_count;
+	    println!("MY TOTAL COUNT IS {}", total_count);
         }
 
-        count
+        overall
     }
 }
 
