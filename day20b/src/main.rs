@@ -1,6 +1,7 @@
 mod utils;
 
 use anyhow::{anyhow, Result};
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufRead};
@@ -19,6 +20,21 @@ impl Coordinates {
     fn new(y: usize, x: usize) -> Self {
         Coordinates { y, x }
     }
+
+    fn distance(c1: Coordinates, c2: Coordinates) -> usize {
+        let x = if c1.x > c2.x {
+            c1.x - c2.x
+        } else {
+            c2.x - c1.x
+        };
+        let y = if c1.y > c2.y {
+            c1.y - c2.y
+        } else {
+            c2.y - c1.y
+        };
+
+        x + y
+    }
 }
 
 #[derive(Debug)]
@@ -31,7 +47,7 @@ struct Maze {
     max_x: usize,
     score: usize,
     cheats: HashSet<(i32, i32)>,
-    cheat_count: BTreeMap<usize, usize>,
+    cheat_count: RefCell<BTreeMap<usize, usize>>,
 }
 
 impl Maze {
@@ -48,7 +64,7 @@ impl Maze {
             max_x,
             score: 0,
             cheats: generate_cheats(cheat_size),
-            cheat_count: BTreeMap::new(),
+            cheat_count: RefCell::new(BTreeMap::new()),
         }
     }
 
@@ -112,12 +128,7 @@ impl Maze {
         Ok(())
     }
 
-    fn check_cheat(
-        &mut self,
-        cheat: (i32, i32),
-        curr: Coordinates,
-        min_score: usize,
-    ) -> Result<bool> {
+    fn check_cheat(&self, cheat: (i32, i32), curr: Coordinates, min_score: usize) -> Result<bool> {
         //println!("Checking cheat {:?}!!!", curr);
 
         if curr == Coordinates::new(91, 104) && cheat == (-2, 0) {
@@ -138,33 +149,25 @@ impl Maze {
             self.score_grid[curr.y][curr.x].ok_or_else(|| anyhow!("Cheat start not on path"))?;
 
         if self.score_grid[y][x].is_some() {
-            if Coordinates::new(y, x) == self.end {
-                if let Some(end_val) = self.score_grid[y][x] {
-                    if end_val >= (start_val + 2 + min_score) {
-                        let seconds_saved = end_val - start_val - 2;
-                        *(self.cheat_count).entry(seconds_saved).or_insert(0) += 1;
+            let dist = Coordinates::distance(curr, Coordinates::new(y, x));
 
-                        println!(
-                            "Cheat from {:?} to {:?} saved {}",
-                            curr, self.end, seconds_saved
-                        );
-                        return Ok(true);
-                    }
-                }
-            } else {
-                if let Some(end_loc) = self.get_next_location(Coordinates::new(y, x)) {
-                    if let Some(end_val) = self.score_grid[end_loc.y][end_loc.x] {
-                        if end_val <= self.score {
-                            if end_val >= (start_val + 3 + min_score) {
-                                let seconds_saved = end_val - start_val - 3;
-                                *(self.cheat_count).entry(seconds_saved).or_insert(0) += 1;
-                                println!(
-                                    "Cheat from {:?} to {:?} saved {}",
-                                    curr, end_loc, seconds_saved
-                                );
-                                return Ok(true);
-                            }
+            if let Some(end_val) = self.score_grid[y][x] {
+                if end_val <= self.score {
+                    if end_val >= (start_val + dist + min_score) {
+                        let seconds_saved = end_val - start_val - dist;
+                        {
+                            let mut tmp = self.cheat_count.borrow_mut();
+                            *tmp.entry(seconds_saved).or_insert(0) += 1;
                         }
+                        /*
+                                    println!(
+                                        "Cheat from {:?} to {:?} saved {}",
+                                        curr,
+                                        Coordinates::new(y, x),
+                                        seconds_saved
+                                );
+                        */
+                        return Ok(true);
                     }
                 }
             }
@@ -211,7 +214,7 @@ impl Maze {
         None
     }
 
-    fn find_cheats(&mut self, min_score: usize) -> Result<usize> {
+    fn find_cheats(&self, min_score: usize) -> Result<usize> {
         let mut current_location = self.start;
         let mut cheat_count = 0;
 
@@ -258,7 +261,7 @@ fn read_input(path: &str) -> Result<Maze> {
     let start = find_location(&grid, 'S').ok_or_else(|| anyhow!("Start not found in grid"))?;
     let end = find_location(&grid, 'E').ok_or_else(|| anyhow!("End not found in grid"))?;
 
-    Ok(Maze::new(grid, start, end, 2))
+    Ok(Maze::new(grid, start, end, 20))
 }
 
 fn generate_cheats(size: i32) -> HashSet<(i32, i32)> {
@@ -266,7 +269,6 @@ fn generate_cheats(size: i32) -> HashSet<(i32, i32)> {
     for y in -size..=size {
         for x in -(size - y.abs())..=(size - y.abs()) {
             set.insert((y, x));
-            println!("({}, {})", y, x);
         }
     }
     set
@@ -284,19 +286,19 @@ fn main() -> Result<()> {
 
     let cheat_count = maze.find_cheats(100)?;
     let end = start.elapsed();
+
+    let cc = maze.cheat_count.borrow();
+    for (key, value) in cc.iter() {
+        if *value == 1 {
+            println!("There is one cheat that saves {} picoseconds.", key);
+        } else {
+            println!("There are {} cheats that saves {} picoseconds.", value, key);
+        }
+    }
+
     println!("The total cheat count is {} {:?}", cheat_count, end);
 
-    generate_cheats(2);
-
-    /*    for (key, value) in maze.cheat_count {
-            if value == 1 {
-                println!("There is one cheat that saves {} picoseconds.", key);
-            } else {
-                println!("There are {} cheats that saves {} picoseconds.", value, key);
-            }
-        }
-
-
+    /*
     println!("Total Score {:?} in {:?}", score, end);
     */
 
