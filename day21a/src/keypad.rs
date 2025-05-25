@@ -1,8 +1,6 @@
 use crate::coordinates::Coordinates;
 use std::collections::HashMap;
 
-use anyhow::{anyhow, Result};
-
 #[derive(Debug)]
 pub struct Keypad {
     keypad: Vec<Vec<Option<char>>>,
@@ -86,7 +84,7 @@ impl Keypad {
         current: Coordinates,
     ) -> Option<Coordinates> {
         let new_y = current.y as i32 + y_off;
-        let new_x = current.y as i32 + x_off;
+        let new_x = current.x as i32 + x_off;
 
         if new_y < 0
             || new_x < 0
@@ -109,18 +107,20 @@ impl Keypad {
         for y in 0..self.keypad.len() {
             for x in 0..self.keypad[0].len() {
                 for end in end_locs.iter() {
-                    let current = Coordinates::new(y, x);
-                    if *end != current {
-                        let mut str = String::new();
-                        self.find_paths(
-                            current,
-                            current,
-                            *end,
-                            Coordinates::distance(*end, current),
-                            0,
-                            &mut str,
-                        );
+                    if y == 3 && x == 2 {
+                        println!("finding paths for {} {} to  {} {}", y, x, end.y, end.x);
                     }
+
+                    let current = Coordinates::new(y, x);
+                    let mut str = String::new();
+                    self.find_paths(
+                        current,
+                        current,
+                        *end,
+                        Coordinates::distance(*end, current),
+                        0,
+                        &mut str,
+                    );
                 }
             }
         }
@@ -131,7 +131,11 @@ impl Keypad {
 
         if let Some(end) = code.chars().next() {
             if let Some(path) = self.paths.get(&(start, end)) {
-                ret = path.clone();
+                for p in path {
+                    let mut tmp = p.clone();
+                    tmp.push('A');
+                    ret.push(tmp);
+                }
             } else {
                 return ret;
             }
@@ -139,6 +143,59 @@ impl Keypad {
             return ret;
         }
 
+        let chars: Vec<char> = code.chars().collect();
+
+        for pair in chars.windows(2) {
+            if let Some(paths) = self.paths.get(&(pair[0], pair[1])) {
+                let mut tmp_vec = Vec::new();
+                for p1 in ret.into_iter() {
+                    for p2 in paths {
+                        let mut tmp_str = p1.clone();
+                        tmp_str.push_str(p2);
+                        tmp_str.push('A');
+                        tmp_vec.push(tmp_str);
+                    }
+                }
+                ret = tmp_vec;
+            }
+        }
+
         ret
+    }
+
+    pub fn decode_vec(&self, start: char, codes: &Vec<String>) -> Vec<String> {
+        let mut ret = Vec::new();
+
+        for c in codes {
+            let tmp = self.decode(start, c);
+            ret.extend(tmp);
+        }
+
+        ret
+    }
+
+    pub fn decode_len(&self, start: char, vec: &Vec<String>, iter_count: usize) -> usize {
+        let mut input = vec.clone();
+        let mut out: Vec<String> = Vec::new();
+
+        for _ in 0..iter_count {
+            for i in input {
+                let tmp = self.decode(start, &i);
+                if !tmp.is_empty() {
+                    if out.is_empty() || tmp[0].len() < out[0].len() {
+                        out = tmp;
+                    }
+                }
+            }
+
+            input = out;
+            out = vec![];
+        }
+
+        if !input.is_empty() {
+            input[0].len()
+        } else {
+            0
+        }
     }
 }
