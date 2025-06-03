@@ -1,5 +1,3 @@
-mod utils;
-
 use anyhow::{anyhow, Result};
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
@@ -129,12 +127,6 @@ impl Maze {
     }
 
     fn check_cheat(&self, cheat: (i32, i32), curr: Coordinates, min_score: usize) -> Result<bool> {
-        //println!("Checking cheat {:?}!!!", curr);
-
-        if curr == Coordinates::new(91, 104) && cheat == (-2, 0) {
-            println!("FOUND THE BAD ONE");
-        }
-
         let x = curr.x as i32 + cheat.1;
         let y = curr.y as i32 + cheat.0;
 
@@ -159,14 +151,6 @@ impl Maze {
                             let mut tmp = self.cheat_count.borrow_mut();
                             *tmp.entry(seconds_saved).or_insert(0) += 1;
                         }
-                        /*
-                                    println!(
-                                        "Cheat from {:?} to {:?} saved {}",
-                                        curr,
-                                        Coordinates::new(y, x),
-                                        seconds_saved
-                                );
-                        */
                         return Ok(true);
                     }
                 }
@@ -279,10 +263,7 @@ fn main() -> Result<()> {
 
     let mut maze = read_input("day20.txt")?;
 
-    //utils::print_grid(&maze.grid);
-
     let _ = maze.create_score_grid();
-    //utils::print_grid_opt(&maze.score_grid);
 
     let cheat_count = maze.find_cheats(100)?;
     let end = start.elapsed();
@@ -297,10 +278,6 @@ fn main() -> Result<()> {
     }
 
     println!("The total cheat count is {} {:?}", cheat_count, end);
-
-    /*
-    println!("Total Score {:?} in {:?}", score, end);
-    */
 
     Ok(())
 }
