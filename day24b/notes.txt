@@ -1,0 +1,7 @@
+
+Swap #1
+dvh AND hnn -> z11
+hnn XOR dvh -> rpv
+
+
+
