@@ -6,6 +6,37 @@ const allocator = gpa.allocator();
 
 const Range = struct { start: u64, end: u64 };
 
+pub fn doRangesIntersect(r1: Range, r2: Range) bool {
+    if ((r1.start >= r2.start and r1.start <= r2.end) or
+        (r1.end >= r2.start and r1.end <= r2.end) or
+        (r2.start >= r1.start and r2.start <= r1.end) or
+        (r2.end >= r1.start and r2.end <= r1.end))
+    {
+        return true;
+    }
+    return false;
+}
+
+pub fn mergeRanges(r1: Range, r2: Range) Range {
+    return .{ .start = @min(r1.start, r2.start), .end = @max(r1.end, r2.end) };
+}
+
+pub fn addAndMergeRangeToList(r: Range, list: *ArrayList(Range)) !void {
+    var range: Range = r;
+
+    var index: usize = 0;
+
+    while (index < list.items.len) {
+        if (doRangesIntersect(range, list.items[index])) {
+            range = mergeRanges(range, list.items[index]);
+            _ = list.swapRemove(index);
+        } else {
+            index += 1;
+        }
+    }
+    try list.append(allocator, range);
+}
+
 pub fn countFreshIngredients(ranges: []Range, ids: []u64) u64 {
     var count: u64 = 0;
     for (ids) |i| {
@@ -19,7 +50,7 @@ pub fn countFreshIngredients(ranges: []Range, ids: []u64) u64 {
     return count;
 }
 
-pub fn readInput(range: *ArrayList(Range), ids: *ArrayList(u64)) !void {
+pub fn readInput(mergedRange: *ArrayList(Range), ids: *ArrayList(u64)) !void {
     const cwd = std.fs.cwd();
     const file = try cwd.openFile("day5.txt", .{ .mode = .read_only });
     defer file.close();
@@ -35,7 +66,8 @@ pub fn readInput(range: *ArrayList(Range), ids: *ArrayList(u64)) !void {
             const start = try std.fmt.parseInt(u64, str[0..index], 10);
             const end = try std.fmt.parseInt(u64, str[index + 1 ..], 10);
 
-            try range.append(allocator, .{ .start = start, .end = end });
+            const r: Range = .{ .start = start, .end = end };
+            try addAndMergeRangeToList(r, mergedRange);
         } else {
             if (str.len != 0) {
                 const id = try std.fmt.parseInt(u64, str, 10);
@@ -54,31 +86,28 @@ pub fn readInput(range: *ArrayList(Range), ids: *ArrayList(u64)) !void {
 pub fn main() !void {
     defer _ = gpa.deinit();
 
-    var ranges = try ArrayList(Range).initCapacity(allocator, 500);
+    var mergedRanges = try ArrayList(Range).initCapacity(allocator, 500);
     var ids = try ArrayList(u64).initCapacity(allocator, 500);
-    defer ranges.deinit(allocator);
+    defer mergedRanges.deinit(allocator);
     defer ids.deinit(allocator);
 
-    try readInput(&ranges, &ids);
-    //defer {
-    //    std.debug.print("Dealloc", .{});
-    //    for (list.items) |l| {
-    //        allocator.free(l);
-    //    }
-    //    list.deinit(allocator);
+    try readInput(&mergedRanges, &ids);
+
+    //for (ranges.items) |r| {
+    //    std.debug.print("{}\n", .{r});
     //}
 
-    for (ranges.items) |r| {
-        std.debug.print("{}\n", .{r});
+    //for (ids.items) |i| {
+    //    std.debug.print("{d}\n", .{i});
+    //}
+
+    const count = countFreshIngredients(mergedRanges.items, ids.items);
+    std.debug.print("Part 1: We have {d} fresh ingredients.\n", .{count});
+
+    var mergedCount: u64 = 0;
+    for (mergedRanges.items) |r| {
+        mergedCount += (r.end - r.start) + 1;
     }
 
-    for (ids.items) |i| {
-        std.debug.print("{d}\n", .{i});
-    }
-
-    const count = countFreshIngredients(ranges.items, ids.items);
-    std.debug.print("We have {d} fresh ingredients.\n", .{count});
-
-    //const rolls2 = try checkRolls(&list, true);
-    //std.debug.print("Part 2: We can access {d} rolls.\n", .{rolls2});
+    std.debug.print("Part 2: We have {d} fresh ingredients.\n", .{mergedCount});
 }
