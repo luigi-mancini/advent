@@ -4,39 +4,21 @@ const ArrayList = std.ArrayList;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator = gpa.allocator();
 
-pub fn parse(comptime T: type, str: []const u8, list: *ArrayList(ArrayList(T))) !void {
-    const init = list.*.items.len == 0;
-
+pub fn parseOperators(str: []const u8, list: *ArrayList(u8)) !void {
     var it = std.mem.tokenizeAny(u8, str, " ");
 
-    var index: usize = 0;
+    while (it.next()) |val| {
+        std.debug.assert(val.len == 1);
 
-    while (it.next()) |val| : (index += 1) {
-        const operand = switch (type) {
-            u64 => try std.fmt.parseInt(T, val, 10),
-            u8 => val,
-            else => val,
-        };
-
-        //
-
-        if (init) {
-            try list.append(allocator, try ArrayList(T).initCapacity(allocator, 10));
-        }
-
-        std.debug.assert(index < list.items.len);
-
-        try list.items[index].append(allocator, operand);
+        try list.append(allocator, val[0]);
     }
 }
 
-pub fn parseOperands(str: []u8, list: *ArrayList(ArrayList(u64))) !void {
+pub fn parseOperands(str: []const u8, list: *ArrayList(ArrayList(u64))) !void {
     const init = list.*.items.len == 0;
-
     var it = std.mem.tokenizeAny(u8, str, " ");
 
     var index: usize = 0;
-
     while (it.next()) |val| : (index += 1) {
         const operand = try std.fmt.parseInt(u64, val, 10);
 
@@ -45,28 +27,91 @@ pub fn parseOperands(str: []u8, list: *ArrayList(ArrayList(u64))) !void {
         }
 
         std.debug.assert(index < list.items.len);
-
-        list.items[index] = operand;
+        try list.items[index].append(allocator, operand);
     }
 }
 
-pub fn readInput(operands: *ArrayList(ArrayList(u64)), operators: *ArrayList(ArrayList(u8))) !void {
+pub fn createOperandsFromTable(table: [][]u8, list: *ArrayList(ArrayList(u64))) !void {
+    var index: usize = 0;
+    var str = try std.ArrayList(u8).initCapacity(allocator, 10);
+    defer str.deinit(allocator);
+
+    for (0..table[0].len) |x| {
+        for (0..table.len) |y| {
+            if (std.ascii.isDigit(table[y][x])) {
+                try str.append(allocator, table[y][x]);
+            }
+        }
+
+        if (str.items.len == 0) {
+            index += 1;
+        } else {
+            if (index == list.items.len) {
+                try list.append(allocator, try ArrayList(u64).initCapacity(allocator, 10));
+            }
+            const val = try std.fmt.parseInt(u64, str.items, 10);
+            try list.items[index].append(allocator, val);
+        }
+
+        str.clearRetainingCapacity();
+    }
+}
+
+pub fn addList(list: []u64) u64 {
+    var ret: u64 = 0;
+    for (list) |val| {
+        ret += val;
+    }
+
+    return ret;
+}
+
+pub fn multList(list: []u64) u64 {
+    var ret: u64 = 1;
+    for (list) |val| {
+        ret *= val;
+    }
+
+    return ret;
+}
+
+pub fn computeAnswer(operands: []ArrayList(u64), operators: []u8) u64 {
+    std.debug.assert(operands.len == operators.len);
+
+    var answer: u64 = 0;
+    for (0..operands.len) |index| {
+        answer += switch (operators[index]) {
+            '+' => addList(operands[index].items),
+            '*' => multList(operands[index].items),
+            else => {
+                @panic("Unexpected operator");
+            },
+        };
+    }
+
+    return answer;
+}
+
+pub fn readInput(operands: *ArrayList(ArrayList(u64)), operators: *ArrayList(u8), table: *ArrayList([]u8)) !void {
     const cwd = std.fs.cwd();
-    const file = try cwd.openFile("test.txt", .{ .mode = .read_only });
+    const file = try cwd.openFile("day6.txt", .{ .mode = .read_only });
     defer file.close();
 
-    var read_buffer: [1024]u8 = undefined;
+    var read_buffer: [1024 * 10]u8 = undefined;
     var fr = file.reader(&read_buffer);
     var reader = &fr.interface;
 
     while (reader.takeDelimiterExclusive('\n')) |line| {
-        const str = std.mem.trimRight(u8, line, "\r\n");
+        const str = std.mem.trim(u8, line, "\r\n");
+        const trimmed = std.mem.trim(u8, line, " ");
 
         if (str.len != 0) {
-            if (std.ascii.isDigit(str[0])) {
-                try parse(u64, str, operands);
+            if (str[0] == '*' or str[0] == '+') {
+                try parseOperators(trimmed, operators);
             } else {
-                try parse(u8, str, operators);
+                const tmp = try allocator.dupe(u8, str);
+                try table.append(allocator, tmp);
+                try parseOperands(trimmed, operands);
             }
         }
         _ = try reader.discardDelimiterInclusive('\n');
@@ -79,25 +124,41 @@ pub fn readInput(operands: *ArrayList(ArrayList(u64)), operators: *ArrayList(Arr
 }
 
 pub fn main() !void {
-    //defer _ = gpa.deinit();
+    defer _ = gpa.deinit();
 
     var operands = try ArrayList(ArrayList(u64)).initCapacity(allocator, 500);
-    var operators = try ArrayList(ArrayList(u8)).initCapacity(allocator, 500);
-    defer operands.deinit(allocator);
-    defer operators.deinit(allocator);
+    var operators = try ArrayList(u8).initCapacity(allocator, 500);
+    var table = try ArrayList([]u8).initCapacity(allocator, 500);
+    var operands_part2 = try ArrayList(ArrayList(u64)).initCapacity(allocator, 500);
 
-    try readInput(&operands, &operators);
+    defer {
+        for (operands.items) |*tmp| {
+            tmp.deinit(allocator);
+        }
+        operands.deinit(allocator);
+        operators.deinit(allocator);
 
-    for (operands.items) |op| {
-        std.debug.print("LDB {}\n", .{op});
+        for (table.items) |tmp| {
+            allocator.free(tmp);
+        }
+        table.deinit(allocator);
+
+        for (operands_part2.items) |*tmp| {
+            tmp.deinit(allocator);
+        }
+        operands_part2.deinit(allocator);
     }
 
-    //for (ids.items) |i| {
-    //    std.debug.print("{d}\n", .{i});
-    //}
+    try readInput(&operands, &operators, &table);
 
-    // const count = countFreshIngredients(mergedRanges.items, ids.items);
-    //std.debug.print("Part 1: We have {d} fresh ingredients.\n", .{count});
+    // for (table.items) |op| {
+    //    std.debug.print("{s}\n", .{op});
+    // }
 
-    //std.debug.print("Part 2: We have {d} fresh ingredients.\n", .{mergedCount});
+    const answer: u64 = computeAnswer(operands.items, operators.items);
+    std.debug.print("Part 1: The answer is {d}.\n", .{answer});
+
+    try createOperandsFromTable(table.items, &operands_part2);
+    const answer_part2: u64 = computeAnswer(operands_part2.items, operators.items);
+    std.debug.print("Part 2: The answer is {d}.\n", .{answer_part2});
 }
